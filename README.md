@@ -1,3 +1,5 @@
+# visa_ma_revenue_pred
+
 Project predicting revenue of two major credit card companies from macroeconomic indicators and company-specific data.
 
 Contains:
