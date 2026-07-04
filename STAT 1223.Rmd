@@ -1,0 +1,163 @@
+---
+title: "STAT 1223"
+output: html_document
+date: "2024-10-27"
+---
+
+Read in data 
+
+```{r}
+v_fin = read.csv("V_fin.csv", header = TRUE, sep = ",")
+v_ind = read.csv("V_WW.csv", header = TRUE, sep = ",")
+ma_fin = read.csv("MA_fin.csv", header = TRUE, sep = ",")
+ma_ind = read.csv("MA_WW.csv", header = TRUE, sep = ",")
+econ = read.csv("EconInd.csv", header = TRUE, sep = ",")
+```
+
+
+Create new dataframes to allow for easier data testing and visualization
+
+```{r}
+visa = merge(v_fin, v_ind, by=c("Report.Date")) # merge financials and indicators to allow model creation
+names(visa) <- c("date", "revenue", "ebitda", "net_income", "cards", "cash_trans", "cash_vol", "gdv", "purch_trans", "purch_vol") #rename visa columns
+visa_subset = subset(visa, select = -c(date)) #df with no report date
+
+mastercard = merge(ma_fin, ma_ind, by=c("Report.Date"))
+names(mastercard) <- c("date", "revenue", "ebitda", "net_income", "cards", "cash_trans", "cash_vol", "gdv", "purch_trans", "purch_vol") #rename mc columns
+mastercard_subset = subset(mastercard, select = -c(date)) #df with no report date
+
+names(econ) <- c("date", "sp_500", "nominal_gdp", "real_gdp", "real_gdp_percap", "cpi", "cpi_lessfoodenergy", "personal_consump", "unemployment_rate", "unemployment_level", "threemo_int", "tenyr_int") #rename econ columns
+econ_subset = subset(econ, select = -c(date)) #df with no report date
+
+visa_econ = merge(visa, econ, by=c("date")) #visa df with all predictors + responses 
+ma_econ = merge(mastercard, econ, by=c("date")) #ma df with all predictors + responses
+
+visa_econ_subset = subset(visa_econ, select = -c(date))
+ma_econ_subset = subset(ma_econ, select = -c(date))
+```
+
+Test for collinearity
+```{r}
+require(regclass)
+
+round(cor(visa_econ_subset), 3)
+round(cor(ma_econ_subset), 3)
+
+full_visa = lm(revenue ~ cards + cash_trans + cash_vol + gdv + purch_trans + purch_vol + sp_500 + nominal_gdp + real_gdp + real_gdp_percap + cpi + cpi_lessfoodenergy + personal_consump + unemployment_rate + unemployment_level + threemo_int + tenyr_int, data = visa_econ)
+full_ma = lm(revenue ~ cards + cash_trans + cash_vol + gdv + purch_trans + purch_vol + sp_500 + nominal_gdp + real_gdp + real_gdp_percap + cpi + cpi_lessfoodenergy + personal_consump + unemployment_rate + unemployment_level + threemo_int + tenyr_int, data = ma_econ)
+
+VIF(full_visa)
+VIF(full_ma)
+```
+
+Attempt to fix collinearity
+```{r}
+require(MASS)
+
+min_visa = lm(revenue ~ 1, data = visa_econ)
+max_visa = formula(full_visa)
+best_fvisa = step(min_visa, direction = "forward", scope = max_visa)
+
+VIF(best_fvisa)
+summary(best_fvisa)
+```
+
+```{r}
+best_bvisa = step(full_visa, direction = "backward")
+VIF(best_bvisa)
+summary(best_bvisa)
+```
+
+```{r}
+best_svisa = step(min_visa, direction = "both", scope = max_visa)
+VIF(best_svisa)
+summary(best_svisa)
+```
+
+```{r}
+visa_model = lm(revenue ~ cash_trans + purch_trans + threemo_int + unemployment_rate, data = visa_econ)
+summary(visa_model)
+anova(visa_model)
+VIF(visa_model)
+```
+
+```{r}
+visa_econ$predict = predict(visa_model)
+visa_econ$jackknife = rstudent(visa_model)
+
+plot(visa_econ$predict, visa_econ$jackknife, pch = 19, xlab = "Predicted Revenue", ylab = "Jackknife residual")
+abline(a=0,b=0)
+qqnorm(visa_econ$jackknife, pch = 19)
+qqline(visa_econ$jackknife)
+
+visa_econ$cook = cooks.distance(visa_model)
+plot(visa_econ$cook, xlab = "Observation", ylab = "Cook's Distance", type = "h")
+abline(a=4/51,b=0)
+
+visa_econ$inf_pt = ifelse(visa_econ$cook > 4/51, 1, 0)
+s = visa_econ[which(visa_econ$inf_pt == 0), ]
+visa_model2 = lm(revenue ~ cash_trans + purch_trans + threemo_int + unemployment_rate, data = s)
+summary(visa_model2)
+```
+
+```{r}
+min_ma = lm(revenue ~ 1, data = ma_econ)
+max_ma = formula(full_ma)
+best_fma = step(min_ma, direction = "forward", scope = max_ma)
+
+VIF(best_fma)
+summary(best_fma)
+```
+
+```{r}
+best_bma = step(full_ma, direction = "backward")
+VIF(best_bma)
+summary(best_bma)
+```
+
+```{r}
+best_sma = step(min_ma, direction = "both", scope = max_ma)
+VIF(best_sma)
+summary(best_sma)
+```
+
+```{r}
+ma_model = lm(revenue ~ threemo_int + real_gdp + unemployment_level+ cpi_lessfoodenergy, data = visa_econ)
+summary(ma_model)
+VIF(ma_model)
+```
+
+
+```{r}
+median(visa_econ$revenue)
+mean(visa_econ$revenue)
+sd(visa_econ$revenue)
+median(ma_econ$revenue)
+mean(ma_econ$revenue)
+sd(ma_econ$revenue)
+
+plot(visa_econ$revenue, main = "Visa Revenue", pch = 19, ylab = "Revenue")
+plot(ma_econ$revenue, main = "Mastercard Revenue", pch = 19, ylab = "Revenue")
+
+visa_econ$log_rev = log(visa_econ$revenue)
+plot(visa_econ$log_rev, main = "Log Visa Revenue", pch = 19, ylab = "Log Revenue")
+```
+
+
+```{r}
+ma_econ$predict = predict(ma_model)
+ma_econ$jackknife = rstudent(ma_model)
+plot(ma_econ$predict, ma_econ$jackknife, pch = 19, xlab = "Predicted Revenue", ylab = "Jackknife residual")
+abline(a=0,b=0)
+qqnorm(ma_econ$jackknife, pch = 19)
+qqline(ma_econ$jackknife)
+
+ma_econ$cook = cooks.distance(ma_model)
+plot(ma_econ$cook, xlab = "Observation", ylab = "Cook's Distance", type = "h")
+abline(a=4/51,b=0)
+
+ma_econ$inf_pt = ifelse(ma_econ$cook > 4/51, 1, 0)
+s2 = ma_econ[which(ma_econ$inf_pt == 0), ]
+ma_model2 = lm(revenue ~ threemo_int + real_gdp + unemployment_level+ cpi_lessfoodenergy, data = s2)
+summary(ma_model2)
+```
