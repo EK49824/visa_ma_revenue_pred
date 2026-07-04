@@ -2,7 +2,7 @@ Project predicting revenue of two major credit card companies from macroeconomic
 
 Contains:
 * R code with EDA
-* Datasets used for analysi
+* Datasets used for analysis
 * Research paper explaining findings
 
 Tools and Frameworks:
