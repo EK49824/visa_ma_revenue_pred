@@ -4,8 +4,9 @@ Project predicting revenue of two major credit card companies from macroeconomic
 
 Contains:
 * R code with EDA
+* Python code with model training
 * Datasets used for analysis
-* Research paper explaining findings
+* Research paper explaining EDA findings
 
 Tools and Frameworks:
 * regclass (to check variance inflation factor)
